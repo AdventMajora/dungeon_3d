@@ -1,0 +1,354 @@
+<!DOCTYPE HTML>
+<html>
+	<head>
+
+	</head>
+	<body bgcolor="#787878" onresize="manageScreen()">
+	<canvas id="myCanvas" height="72" width="80" style="border:1px solid black; image-rendering: pixelated;"></canvas>
+	<script>
+		var canvasHeight = 72;             //height of the rendered canvas (default value)
+		var canvasWidth = 80;              //Width of the rendered canvas (default value)
+		var screenWidth = 80;		        //Game Resolution Width
+		var screenHeight = 72;		        //Game Resolution Height
+		var sheetWidth = 24*8;
+		var scaleFactor = 5;		        //screen scaling factor (default value)
+		var TO_RADIANS = Math.PI/180;
+		var curr_angle = 0;
+		var curr_offset = .75;
+		var pressedKeys = [];
+		var draw_x = 0;
+		var draw_y = 0;
+		var cam_move_speed = .75;
+		var cam_rot_speed = 2;
+		var boxes = [];
+		var off_x = 0;
+		var off_y = 0;
+		var hyp = 0;
+		var center_x = screenWidth/2;
+		var center_y = screenHeight/2;
+		var player_x;
+		var player_y;
+		var debug = false;
+		
+		
+		
+		//initiate canvas
+		var canvas = document.getElementById("myCanvas");
+		var ctx = canvas.getContext("2d");
+		ctx.imageSmoothingEnabled = false;
+		
+		var box_sheet = new Image();
+		box_sheet.src = 'box.png';
+		
+		var player_sheet = new Image();
+		player_sheet.src = 'player.png';
+		
+		manageScreen();
+		
+		//handlie key presses
+		document.addEventListener('keydown', function(event) {
+		  switch (event.keyCode) {
+			case	74:	if (pressedKeys.indexOf('J')<0) {
+							pressedKeys.push('J');
+						}
+						break;
+			case    65: if (pressedKeys.indexOf('A')<0) {
+							pressedKeys.push('A');
+						}
+						break;
+			case    87: if (pressedKeys.indexOf('W')<0) {
+							pressedKeys.push('W');
+						}
+						break;
+			case    68: if (pressedKeys.indexOf('D')<0) {
+							pressedKeys.push('D');
+						}
+						break;
+			case    83: if (pressedKeys.indexOf('S')<0) {
+							pressedKeys.push('S');
+						}
+						break;
+			case    38: if (pressedKeys.indexOf('UP')<0) {
+							pressedKeys.push('UP');
+						}
+						break;
+			case    37: if (pressedKeys.indexOf('LEFT')<0) {
+							pressedKeys.push('LEFT');
+						}
+						break;
+			case    40: if (pressedKeys.indexOf('DOWN')<0) {
+							pressedKeys.push('DOWN');
+						}
+						break;
+			case    39: if (pressedKeys.indexOf('RIGHT')<0) {
+							pressedKeys.push('RIGHT');
+						}
+						break;
+		  }
+		}, false);
+
+		//handle key releases
+		document.addEventListener('keyup', function(event) {
+		  switch (event.keyCode) {
+			case	74:	pressedKeys.splice(pressedKeys.indexOf('J'),1);
+						break;
+			case    65: pressedKeys.splice(pressedKeys.indexOf('A'),1);
+						break;
+			case    87: pressedKeys.splice(pressedKeys.indexOf('W'),1);
+						break;
+			case    68: pressedKeys.splice(pressedKeys.indexOf('D'),1);
+						break;
+			case    83: pressedKeys.splice(pressedKeys.indexOf('S'),1);
+						break;
+			case    77: pressedKeys.splice(pressedKeys.indexOf('M'),1);
+						break;
+			case	32:	pressedKeys.splice(pressedKeys.indexOf('_'),1);
+						//player.attacking = false;
+						break;
+			case	38:	pressedKeys.splice(pressedKeys.indexOf('UP'),1);
+						break;
+			case    37: pressedKeys.splice(pressedKeys.indexOf('LEFT'),1);
+						break;
+			case    40: pressedKeys.splice(pressedKeys.indexOf('DOWN'),1);
+						break;
+			case    39: pressedKeys.splice(pressedKeys.indexOf('RIGHT'),1);
+						break;
+		  }
+		}, false);
+		
+		var map = [
+			[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+			[1,0,0,0,0,0,0,5,5,4,4,4,0,0,0,0,0,0,0,1],
+			[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+			[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+			[1,0,0,0,2,2,0,0,0,0,0,0,0,0,2,2,0,0,5,1],
+			[1,0,0,0,2,2,0,0,0,0,0,0,0,0,0,2,0,0,0,1],
+			[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+			[1,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+			[1,1,1,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,1,1],
+			[1,0,0,0,0,0,0,0,0,0,0,0,4,4,5,0,0,0,0,1],
+			[1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+			[1,0,0,0,2,2,0,0,0,0,5,0,0,0,3,3,3,0,0,1],
+			[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+			[1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+			[1,4,4,5,5,0,4,4,0,0,4,0,0,0,0,0,0,0,0,1],
+			[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+		];
+		
+		var brick_col = {
+			height: 24,
+			sprite:0
+		}
+		
+		var brick_box = {
+			height: 8,
+			sprite:24
+		}
+		
+		var marker = {
+			height: 1,
+			sprite:48
+		}
+		var table = {
+			height: 8,
+			sprite: 72
+		}
+		
+		var plant = {
+			height: 8,
+			sprite: 96
+		}
+		var bush = {
+			height: 8,
+			sprite: 120
+		}
+		
+		main_loop();
+		
+		//draw a sprite
+		function drawSprite(sprite,x,y,offset,angle) {
+			
+			
+				sX = Math.floor((sprite-1)/(sheetWidth/8))*8;
+				sY = ((sprite-1)%(sheetWidth/8))*8;
+				
+				ctx.save();
+				//ctx.translate(30,30);
+				var comp_angle = (Math.floor(angle/90)+1)-angle;
+				
+				off_x = Math.cos(angle*TO_RADIANS)*(x+draw_x-center_x) - Math.sin(angle*TO_RADIANS)*(y+draw_y-center_y) + center_x;
+				off_y = Math.sin(angle*TO_RADIANS)*(x+draw_x-center_x) + Math.cos(angle*TO_RADIANS)*(y+draw_y-center_y) + center_y;
+				
+				if (off_x+8 >= -8 && off_x <= screenWidth+8 && off_y+offset+8 >= -8 && off_y <= screenHeight+8) {
+				
+					if (debug) {
+						ctx.fillStyle = 'red';
+						ctx.beginPath();
+						ctx.moveTo(center_x,center_y);
+						ctx.lineTo(off_x,off_y);
+						ctx.stroke();
+					}
+					
+					ctx.translate(off_x,off_y+offset);
+					ctx.rotate(angle * TO_RADIANS);
+					
+					ctx.drawImage(box_sheet,sY,sX,8,8,0,0,8,8);
+					ctx.restore();
+				}
+		}
+		
+		function draw_map(angle, offset) {
+			
+			for (var i=0; i<24; i++) {
+				for (var k=0; k<map.length; k++) {
+					for (var l=0; l<map[k].length; l++) {
+						
+						if (k == Math.floor(player_y) && l == Math.floor(player_x)) {
+							if (i <1) {
+								drawSprite(marker.sprite+1,(l)*8,(k*8),-i*offset, angle);
+							}
+							ctx.drawImage(player_sheet, 0, 23-i,16,1,center_x-8,center_y-(i*offset)+2,16,1);
+						}
+						
+						
+						if (map[k][l] == 1 && i <24) {
+							var act_offset = offset
+							if (act_offset > 1) {
+								act_offset == 1;
+							}
+							drawSprite(brick_col.sprite+i+1,(l*8),(k*8),-i*(offset), angle);
+						}
+						if (map[k][l] == 2 && i <8) {
+							var act_offset = offset
+							if (act_offset > 1) {
+								act_offset == 1;
+							}
+							drawSprite(brick_box.sprite+i+1,(l*8),(k*8),-i*(offset), angle);
+						}
+						if (map[k][l] == 3 && i <8) {
+							var act_offset = offset
+							if (act_offset > 1) {
+								act_offset == 1;
+							}
+							drawSprite(table.sprite+i+1,(l*8),(k*8),-i*(offset), angle);
+						}
+						if (map[k][l] == 4 && i <8) {
+							var act_offset = offset
+							if (act_offset > 1) {
+								act_offset == 1;
+							}
+							drawSprite(plant.sprite+i+1,(l*8),(k*8),-i*(offset), angle);
+						}
+						if (map[k][l] == 5 && i <8) {
+							var act_offset = offset
+							if (act_offset > 1) {
+								act_offset == 1;
+							}
+							drawSprite(bush.sprite+i+1,(l*8),(k*8),-i*(offset), angle);
+						}
+					}
+				}
+			}
+		}
+		
+		function get_input() {
+			if (pressedKeys.indexOf('UP') > -1) {
+				curr_offset+=.1
+			}
+			if (pressedKeys.indexOf('LEFT') > -1) {
+				curr_angle-=cam_rot_speed;
+			}
+			if (pressedKeys.indexOf('DOWN') > -1) {
+				curr_offset-=.1
+			}
+			if (pressedKeys.indexOf('RIGHT') > -1) {
+				curr_angle+=cam_rot_speed;
+			}
+			if (curr_offset > .75) {
+				curr_offset = .75;
+			}
+			if (curr_offset < 0) {
+				curr_offset = 0;
+			}
+			if (curr_angle > 360) {
+				curr_angle = 0;
+			}
+			if (curr_angle < 0) {
+				curr_angle = 360;
+			}
+			var comp_angle = (Math.floor(curr_angle/90)+1)-curr_angle;
+			if (pressedKeys.indexOf('W') > -1) {
+				var to_move_x = draw_x+=+cam_move_speed*Math.sin(curr_angle*TO_RADIANS);
+				var to_move_y = draw_y+=+cam_move_speed*Math.cos(curr_angle*TO_RADIANS);
+				
+				//if (map[player_x][player_y])
+				
+			}
+			if (pressedKeys.indexOf('A') > -1) {
+				draw_x+=cam_move_speed*Math.cos(comp_angle*TO_RADIANS);
+				draw_y+=cam_move_speed*Math.sin(comp_angle*TO_RADIANS);
+			}
+			if (pressedKeys.indexOf('S') > -1) {
+				draw_x+=-cam_move_speed*Math.sin(curr_angle*TO_RADIANS);
+				draw_y+=-cam_move_speed*Math.cos(curr_angle*TO_RADIANS);
+			}
+			if (pressedKeys.indexOf('D') > -1) {
+				draw_x+=-cam_move_speed*Math.cos(comp_angle*TO_RADIANS);
+				draw_y+=-cam_move_speed*Math.sin(comp_angle*TO_RADIANS);
+			}
+		}
+		
+		function main_loop() {
+			
+			get_input();
+			
+			player_x = (center_x-draw_x)/8;
+			player_y = (center_y-draw_y)/8;
+			
+			ctx.scale(scaleFactor,scaleFactor);
+		
+			ctx.fillStyle = '#1A1A1A';
+			ctx.fillRect(0,0,screenWidth,screenHeight);
+			
+			draw_map(curr_angle, curr_offset);
+			
+			ctx.fillStyle = "yellow";
+			ctx.fillRect(center_x-1,center_y-1,2,2);
+			
+			ctx.fillStyle = "black";
+			ctx.fillRect(0,screenHeight-16,screenWidth,16);
+			
+			ctx.scale(1/scaleFactor,1/scaleFactor);
+			ctx.font="25px monospace";
+			ctx.fillStyle = 'red';
+			ctx.fillText("Angle: "+curr_angle,0*scaleFactor,16);
+			ctx.fillText("draw_x: "+draw_x,0*scaleFactor,32);
+			ctx.fillText("draw_y: "+draw_y,0*scaleFactor,48);
+			ctx.fillText("player_x: "+player_x,0*scaleFactor,64);
+			ctx.fillText("player_y: "+player_y,0*scaleFactor,80);
+			ctx.fillText("hyp: "+hyp,0*scaleFactor,96);
+			ctx.fillText("obj_X: "+off_x,0*scaleFactor,112);
+			ctx.fillText("obj_Y: "+off_y,0*scaleFactor,128);
+			window.requestAnimationFrame(main_loop);
+		}
+		
+		//game window management
+		function manageScreen() {
+			 if (window.innerWidth < window.innerHeight) {
+				canvasWidth = window.innerWidth;
+				canvasHeight = Math.floor((72/80)*(window.innerWidth));	
+			} else {
+				canvasHeight = window.innerHeight;
+				canvasWidth = Math.floor((80/72)*(window.innerHeight));
+			}
+			myCanvas.style.top = JSON.stringify((window.innerHeight/2)-(canvasHeight/2))+'px';
+			myCanvas.style.left = JSON.stringify((window.innerWidth/2)-(canvasWidth/2))+'px';
+			myCanvas.height = JSON.stringify(canvasHeight);
+			myCanvas.width = JSON.stringify(canvasWidth);
+			myCanvas.style.position = 'absolute';
+			ctx.imageSmoothingEnabled = false;
+			scaleFactor = (canvasWidth/80);
+		}
+	</script>
+    
+</html>
